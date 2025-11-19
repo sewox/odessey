@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Odyssey | Galaktik Savaş</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --primary-color: #00f3ff; /* Camgöbeği - Federasyon */
+            --secondary-color: #ff0055; /* Kırmızı - İmparatorluk/Sith */
+            --warning-color: #ffcc00;
+            --success-color: #00ff9d;
+            --bg-color: #050505;
+            --panel-bg: rgba(8, 15, 25, 0.85);
+            --glass-border: 1px solid rgba(0, 243, 255, 0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body { background-color: var(--bg-color); overflow: hidden; font-family: 'Rajdhani', sans-serif; color: var(--primary-color); width: 100vw; height: 100vh; }
+
+        /* 3D & Efektler */
+        #webgl-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; transition: filter 0.2s; }
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px; opacity: 0.15;
+        }
+        
+        /* HUD Katmanı */
+        .hud-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+            pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
+            padding: 15px; background: radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.9) 100%);
+        }
+
+        /* Üst Panel */
+        .top-bar { display: flex; justify-content: space-between; width: 100%; pointer-events: auto; align-items: flex-start; }
+        
+        .ship-status {
+            background: var(--panel-bg); border: var(--glass-border); border-left: 4px solid var(--primary-color);
+            padding: 15px 20px; width: 360px; clip-path: polygon(0 0, 100% 0, 100% 90%, 90% 100%, 0 100%);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.1); position: relative;
+        }
+        .status-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-family: 'Share Tech Mono'; font-size: 0.9rem; align-items: center; color: #cceeff; }
+        .progress-track { width: 150px; height: 6px; background: rgba(0,0,0,0.5); position: relative; overflow: hidden; }
+        .progress-fill { height: 100%; width: 100%; transition: width 0.3s; background: var(--primary-color); box-shadow: 0 0 8px currentColor; }
+        .stat-val-text { font-weight: bold; min-width: 45px; text-align: right; }
+
+        .mission-info { text-align: right; padding: 10px; }
+        .inventory-btn {
+            background: rgba(255, 204, 0, 0.1); border: 1px solid var(--warning-color); color: var(--warning-color);
+            padding: 8px 20px; cursor: pointer; font-family: 'Rajdhani'; font-weight: 800; margin-bottom: 5px;
+            display: flex; align-items: center; gap: 10px; transition: 0.3s; clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
+        }
+        .inventory-btn:hover { background: var(--warning-color); color: #000; box-shadow: 0 0 15px var(--warning-color); }
+
+        /* Log Paneli (Sol) */
+        .middle-section { display: flex; flex-grow: 1; padding: 20px 0; pointer-events: none; position: relative; }
+        .log-panel {
+            width: 420px; background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+            border-left: 3px solid var(--primary-color); padding: 20px; overflow-y: auto; pointer-events: auto;
+            font-size: 0.9rem; height: 55vh; scrollbar-width: none; mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+            text-shadow: 1px 1px 2px black;
+        }
+        .log-entry { margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid rgba(0, 243, 255, 0.1); animation: slideIn 0.3s ease-out; line-height: 1.4; }
+        .log-entry span { font-weight: bold; letter-spacing: 1px; margin-right: 5px; }
+        .log-combat { color: var(--secondary-color); }
+        .log-diplo { color: #a29bfe; } /* Diplomasi rengi */
+        .log-gemini { color: var(--primary-color); }
+        .log-gain { color: var(--success-color); }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+
+        /* Düşman ve Olay HUD */
+        .center-hud { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); width: 450px; text-align: center; pointer-events: auto; display: none; }
+        .enemy-card { background: rgba(20, 0, 0, 0.8); border: 2px solid var(--secondary-color); padding: 15px; clip-path: polygon(10% 0, 100% 0, 100% 90%, 90% 100%, 0 100%, 0 10%); }
+        .enemy-bar-frame { border: 1px solid #555; height: 10px; background: #000; margin: 10px 0; }
+        .enemy-hp-fill { height: 100%; background: var(--secondary-color); width: 100%; transition: width 0.3s; }
+        .enemy-name { font-size: 1.5rem; color: var(--secondary-color); font-weight: 800; letter-spacing: 3px; text-transform: uppercase; }
+
+        /* Olay Modal */
+        .event-modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 500px; background: rgba(5, 10, 15, 0.98); border: 1px solid var(--primary-color);
+            padding: 2px; pointer-events: auto; display: none; z-index: 50; box-shadow: 0 0 80px rgba(0, 243, 255, 0.2);
+        }
+        .modal-inner { border: 1px solid rgba(0,243,255,0.3); padding: 25px; }
+        .modal-title { font-size: 1.5rem; color: #fff; border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-bottom: 15px; }
+        .modal-desc { font-family: 'Share Tech Mono'; font-size: 1rem; color: #ccc; line-height: 1.6; margin-bottom: 20px; }
+        .choice-btn {
+            width: 100%; padding: 12px; margin-bottom: 8px; background: rgba(0,243,255,0.05); border: 1px solid var(--primary-color);
+            color: var(--primary-color); font-family: 'Rajdhani'; font-weight: bold; font-size: 1rem; cursor: pointer;
+            transition: 0.2s; text-align: left; display: flex; justify-content: space-between;
+        }
+        .choice-btn:hover { background: var(--primary-color); color: #000; }
+
+        /* Alt Kontrol Paneli */
+        .control-deck {
+            background: rgba(5, 10, 15, 0.9); border-top: 2px solid var(--primary-color); padding: 15px;
+            pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 10px;
+            width: 95%; margin: 0 auto; border-radius: 15px 15px 0 0; backdrop-filter: blur(10px);
+        }
+        
+        .ai-feedback { font-family: 'Share Tech Mono'; color: #fff; min-height: 20px; text-shadow: 0 0 5px var(--primary-color); }
+        .loading-dots::after { content: '...'; animation: blink 1s infinite; } @keyframes blink { 50% { opacity: 0; } }
+
+        .main-actions { display: flex; gap: 15px; justify-content: center; width: 100%; flex-wrap: wrap; }
+        
+        .action-btn {
+            flex: 1; min-width: 140px; max-width: 200px; padding: 12px; font-family: 'Rajdhani'; font-weight: 800; font-size: 1rem;
+            text-transform: uppercase; background: rgba(0, 20, 30, 0.8); border: 1px solid var(--primary-color); color: white;
+            cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px;
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+        .action-btn small { font-size: 0.65rem; opacity: 0.7; font-weight: 500; font-family: 'Share Tech Mono'; }
+        .action-btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 0 20px var(--primary-color); background: var(--primary-color); color: #000; }
+        .action-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: #444; color: #888; }
+
+        /* Özel Buton Stilleri */
+        .btn-scan { border-color: #00f3ff; color: #00f3ff; }
+        .btn-warp { border-color: #70a1ff; color: #70a1ff; } /* Star Wars Hyperspace Blue */
+        .btn-hyper { border-color: #ff9f43; color: #ff9f43; } /* Riskli Sıçrama */
+        .btn-attack { border-color: #ff0055; color: #ff0055; }
+        .btn-torp { border-color: #ff4757; color: #ff4757; } /* Foton Torpidosu */
+        .btn-shield { border-color: #2ed573; color: #2ed573; }
+        .btn-diplo { border-color: #a29bfe; color: #a29bfe; } /* İletişim */
+        .btn-charge { border-color: #ffeaa7; color: #ffeaa7; } /* Enerji Şarjı */
+
+        /* Nişangah */
+        .reticle {
+            position: absolute; top: 50%; left: 50%; width: 60px; height: 60px; transform: translate(-50%, -50%);
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 50%; pointer-events: none; transition: 0.3s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .reticle.locked { border-color: var(--secondary-color); border-width: 2px; box-shadow: 0 0 20px var(--secondary-color); animation: pulse 0.5s infinite; }
+        @keyframes pulse { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.1); } 100% { transform: translate(-50%, -50%) scale(1); } }
+
+        /* Savaş Efekti */
+        .damage-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;
+            box-shadow: inset 0 0 0 0 rgba(255,0,0,0); transition: box-shadow 0.1s;
+        }
+        .damage-active { box-shadow: inset 0 0 100px 50px rgba(255,0,0,0.6); animation: shake 0.4s; }
+        @keyframes shake { 0% { transform: translate(0,0); } 25% { transform: translate(5px, 5px); } 50% { transform: translate(-5px, -5px); } 75% { transform: translate(5px, -5px); } 100% { transform: translate(0,0); } }
+        
+        /* Enerji Şarj Efekti */
+        .charge-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 19;
+            background: rgba(0, 243, 255, 0); transition: background 0.5s;
+        }
+        .charging { background: rgba(0, 243, 255, 0.1); animation: chargePulse 1s infinite; }
+        @keyframes chargePulse { 0% { opacity: 0.1; } 50% { opacity: 0.3; } 100% { opacity: 0.1; } }
+
+        /* Envanter Modal */
+        .modal-overlay {
+            position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 100;
+            display: none; align-items: center; justify-content: center; pointer-events: auto; backdrop-filter: blur(5px);
+        }
+        .inventory-panel {
+            width: 400px; background: rgba(10,15,20,0.95); border: 2px solid var(--warning-color); padding: 20px;
+            max-height: 60vh; overflow-y: auto;
+        }
+        .inv-item { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding: 10px 0; color: #eee; font-family: 'Share Tech Mono'; }
+
+        @media (max-width: 768px) {
+            .log-panel { display: none; }
+            .event-modal { width: 90%; }
+            .ship-status { width: 100%; max-width: 240px; }
+            .action-btn { padding: 10px; font-size: 0.8rem; }
+            .center-hud { width: 90%; top: 15%; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="webgl-container"></canvas>
+    <div class="scanlines"></div>
+    <div class="damage-overlay" id="dmg-overlay"></div>
+    <div class="charge-overlay" id="charge-overlay"></div>
+
+    <!-- Envanter -->
+    <div class="modal-overlay" id="inv-modal" onclick="if(event.target===this) toggleInventory()">
+        <div class="inventory-panel">
+            <h2 style="color:var(--warning-color); border-bottom:1px solid #555; margin-bottom:15px;">KARGO AMBARI</h2>
+            <div id="inv-list"><div style="text-align:center; color:#666;">Ambar Boş</div></div>
+            <button class="action-btn" onclick="toggleInventory()" style="width:100%; margin-top:15px; border-color:#555; color:#aaa;">KAPAT</button>
+        </div>
+    </div>
+
+    <div class="hud-layer">
+        <div class="reticle" id="reticle"></div>
+
+        <!-- Düşman HUD (Savaş Modunda) -->
+        <div class="center-hud" id="combat-hud">
+            <div class="enemy-card">
+                <div class="enemy-name" id="enemy-name">KORSAN GEMİSİ</div>
+                <div class="enemy-bar-frame"><div class="enemy-hp-fill" id="enemy-hp-bar"></div></div>
+                <div style="font-family:'Share Tech Mono'; color:#aaa; font-size:0.8rem;">HEDEF KİLİTLENDİ</div>
+            </div>
+        </div>
+
+        <div class="top-bar">
+            <div class="ship-status">
+                <div class="status-row">
+                    <span>GÖVDE</span><div class="progress-track"><div class="progress-fill" id="hull-bar" style="width: 100%; background: var(--success-color);"></div></div><span class="stat-val-text" id="hull-val">100%</span>
+                </div>
+                <div class="status-row">
+                    <span>KALKAN</span><div class="progress-track"><div class="progress-fill" id="shield-bar" style="width: 50%; background: var(--primary-color);"></div></div><span class="stat-val-text" id="shield-val">50%</span>
+                </div>
+                <div class="status-row">
+                    <span>ENERJİ</span><div class="progress-track"><div class="progress-fill" id="energy-bar" style="width: 100%; background: #a29bfe;"></div></div><span class="stat-val-text" id="energy-val">100%</span>
+                </div>
+                <div class="status-row">
+                    <span style="color:var(--secondary-color);">TORPİDO</span>
+                    <div style="font-family:'Share Tech Mono'; color:#fff;">[ <span id="torp-val">3</span> ]</div>
+                </div>
+            </div>
+
+            <div class="mission-info">
+                <div class="inventory-btn" onclick="toggleInventory()">
+                    <i class="fas fa-box"></i> KARGO (<span id="inv-count">0</span>)
+                </div>
+                <div style="color:var(--warning-color); font-family:'Share Tech Mono'; font-size:1.2rem; text-align:right; margin-top:5px;">
+                    <i class="fas fa-coins"></i> <span id="credits">500</span> CR
+                </div>
+            </div>
+        </div>
+
+        <div class="middle-section">
+            <div class="log-panel" id="log-container">
+                <div class="log-entry"><span style="color:#888;">SİSTEM:</span> Reaktörler çevrimiçi.</div>
+                <div class="log-entry"><span class="log-gemini">YZ:</span> Otomatik enerji yenilenmesi aktif, Kaptan.</div>
+            </div>
+        </div>
+
+        <div class="event-modal" id="event-modal">
+            <div class="modal-inner">
+                <div class="modal-title" id="modal-title">Olay</div>
+                <div class="modal-desc" id="modal-desc">Açıklama...</div>
+                <div id="modal-choices"></div>
+            </div>
+        </div>
+
+        <div class="control-deck">
+            <div class="ai-feedback" id="status-msg">BEKLEMEDE</div>
+            
+            <!-- Seyir Modu -->
+            <div class="main-actions" id="nav-controls">
+                <button class="action-btn btn-scan" id="btn-scan" onclick="Game.scan()">
+                    <i class="fas fa-satellite-dish"></i> TARA <small>-5 Enerji</small>
+                </button>
+                <button class="action-btn btn-warp" id="btn-warp" onclick="Game.warp()">
+                    <i class="fas fa-forward"></i> WARP <small>-20 Enerji</small>
+                </button>
+                <button class="action-btn btn-charge" onclick="Game.recharge()">
+                    <i class="fas fa-bolt"></i> ŞARJ ET <small>+40 Enerji</small>
+                </button>
+                <button class="action-btn btn-repair" id="btn-repair" onclick="Game.repair()">
+                    <i class="fas fa-wrench"></i> ONAR <small>-100 CR</small>
+                </button>
+            </div>
+
+            <!-- Savaş Modu -->
+            <div class="main-actions" id="combat-controls" style="display:none;">
+                <button class="action-btn btn-attack" onclick="Game.firePhasers()">
+                    <i class="fas fa-crosshairs"></i> LAZER <small>-10 Enerji</small>
+                </button>
+                <button class="action-btn btn-torp" onclick="Game.fireTorpedo()">
+                    <i class="fas fa-bomb"></i> TORPİDO <small>-1 Cephane</small>
+                </button>
+                <button class="action-btn btn-charge" onclick="Game.recharge()">
+                    <i class="fas fa-bolt"></i> ŞARJ ET <small>Riskli!</small>
+                </button>
+                <button class="action-btn btn-diplo" onclick="Game.hailTarget()">
+                    <i class="fas fa-comments"></i> İLETİŞİM <small>Diplomasi</small>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        /* ==========================================================================
+           1. OYUN MOTORU
+           ========================================================================== */
+        const Game = {
+            state: {
+                hull: 100, shields: 50, energy: 100, credits: 500, torpedoes: 3,
+                inventory: [],
+                inCombat: false,
+                enemy: null
+            },
+            
+            // --- BAŞLATMA ---
+            init: function() {
+                // Pasif Yenilenme Döngüsü (Her 3 saniyede +2 enerji)
+                setInterval(() => {
+                    if (!this.state.inCombat && this.state.energy < 100) {
+                        this.state.energy = Math.min(100, this.state.energy + 2);
+                        this.updateUI();
+                    }
+                }, 3000);
+                this.updateUI();
+            },
+            
+            updateUI: function() {
+                // Barlar
+                document.getElementById('hull-bar').style.width = this.state.hull + '%';
+                document.getElementById('hull-val').innerText = Math.floor(this.state.hull) + '%';
+                
+                document.getElementById('shield-bar').style.width = this.state.shields + '%';
+                document.getElementById('shield-val').innerText = Math.floor(this.state.shields) + '%';
+
+                document.getElementById('energy-bar').style.width = this.state.energy + '%';
+                document.getElementById('energy-val').innerText = Math.floor(this.state.energy) + '%';
+                
+                document.getElementById('torp-val').innerText = this.state.torpedoes;
+                document.getElementById('credits').innerText = this.state.credits;
+                document.getElementById('inv-count').innerText = this.state.inventory.length;
+
+                // Mod Değişimi
+                document.getElementById('nav-controls').style.display = this.state.inCombat ? 'none' : 'flex';
+                document.getElementById('combat-controls').style.display = this.state.inCombat ? 'flex' : 'none';
+                document.getElementById('combat-hud').style.display = this.state.inCombat ? 'block' : 'none';
+                
+                if(this.state.inCombat) document.getElementById('reticle').classList.add('locked');
+                else document.getElementById('reticle').classList.remove('locked');
+
+                // Buton Kontrolleri
+                document.getElementById('btn-scan').disabled = this.state.energy < 5;
+                document.getElementById('btn-warp').disabled = this.state.energy < 20;
+            },
+
+            log: function(msg, type="log-system") {
+                const c = document.getElementById('log-container');
+                const d = document.createElement('div'); d.className = `log-entry`;
+                if(type) d.classList.add(type);
+                d.innerHTML = `<span>></span> ${msg}`;
+                c.insertBefore(d, c.firstChild);
+                if(c.children.length > 30) c.removeChild(c.lastChild);
+            },
+
+            // --- EYLEMLER ---
+            recharge: function() {
+                this.state.energy = Math.min(100, this.state.energy + 40);
+                this.log("Reaktörlere acil güç aktarıldı.", "log-gain");
+                Visuals.chargeEffect();
+                
+                // Eğer savaştaysak düşman saldırır (Risk)
+                if(this.state.inCombat) {
+                    this.log("Şarj sırasında savunmasız kaldınız!", "log-alert");
+                    setTimeout(() => this.enemyTurn(1.2), 600); // %20 fazla hasar riski
+                }
+                this.updateUI();
+            },
+
+            scan: async function() {
+                if(this.state.energy < 5) return;
+                this.state.energy -= 5;
+                this.log("Sektör taranıyor...", "log-system");
+                Visuals.spawnHolo('scan');
+                
+                const roll = Math.random();
+                if(roll < 0.35) this.startCombat();
+                else if(roll < 0.6) await this.findLoot();
+                else {
+                    this.log("Sektör boş. Sadece kozmik rüzgar.", "log-gemini");
+                    Visuals.changeEnv('normal');
+                }
+                this.updateUI();
+            },
+
+            warp: function() {
+                if(this.state.energy < 20) return;
+                this.state.energy -= 20;
+                this.log("Standart Warp. Sektör değiştiriliyor.", "log-system");
+                Visuals.warpEffect();
+                setTimeout(() => {
+                    // Pasif Yenilenme (Yolculuk sırasında)
+                    this.state.shields = Math.min(100, this.state.shields + 10);
+                    this.state.energy = Math.min(100, this.state.energy + 20);
+                    Visuals.changeEnv(Math.random() > 0.5 ? 'nebula' : 'void');
+                    this.log("Yeni sektöre varıldı.", "log-system");
+                    this.updateUI();
+                }, 2000);
+                this.updateUI();
+            },
+
+            repair: function() {
+                if(this.state.credits < 100 || this.state.hull >= 100) return;
+                this.state.credits -= 100;
+                this.state.hull = Math.min(100, this.state.hull + 30);
+                this.log("İstasyon onarımı tamamlandı.", "log-gemini");
+                this.updateUI();
+            },
+
+            // --- SAVAŞ ---
+            startCombat: async function() {
+                this.state.inCombat = true;
+                this.state.enemy = { hp: 100, maxHp: 100, name: "DÜŞMAN", shield: 20 };
+                Visuals.spawnHolo('enemy');
+                Visuals.changeEnv('alert');
+                
+                const name = await AI.getEnemyName();
+                this.state.enemy.name = name;
+                document.getElementById('enemy-name').innerText = name;
+                document.getElementById('enemy-hp-bar').style.width = '100%';
+                
+                this.log(`ALARM! ${name} tespit edildi!`, "log-combat");
+                this.updateUI();
+            },
+
+            firePhasers: function() {
+                if(this.state.energy < 10) { this.log("Yetersiz enerji!", "log-alert"); return; }
+                this.state.energy -= 10;
+                const dmg = Math.floor(Math.random() * 20) + 10;
+                this.state.enemy.hp -= dmg;
+                this.log(`Lazer atışı: Düşmana ${dmg} hasar!`, "log-gemini");
+                Visuals.laserEffect();
+                this.checkEnemyState();
+            },
+
+            fireTorpedo: function() {
+                if(this.state.torpedoes <= 0) { this.log("Torpido kalmadı!", "log-alert"); return; }
+                this.state.torpedoes--;
+                const dmg = 50; // Yüksek hasar
+                this.state.enemy.hp -= dmg;
+                this.log(`FOTON TORPİDOSU ATEŞLENDİ! KRİTİK HASAR: ${dmg}!`, "log-combat");
+                Visuals.laserEffect(true); // Büyük sarsıntı
+                this.checkEnemyState();
+            },
+
+            hailTarget: async function() {
+                this.log("İletişim kanalı açılıyor...", "log-diplo");
+                const response = await AI.diplomacy(this.state.enemy.name);
+                
+                if(response.includes("BARIŞ") || response.includes("peace") || Math.random() > 0.6) {
+                    this.log(`DÜŞMAN: "Ateşkes kabul edildi. Gidin burdan."`, "log-diplo");
+                    this.endCombat();
+                } else {
+                    this.log(`DÜŞMAN: "Teslim olmak yok! Ateş!"`, "log-combat");
+                    this.enemyTurn(1.2); 
+                }
+            },
+
+            checkEnemyState: function() {
+                if(this.state.enemy.hp <= 0) this.winCombat();
+                else setTimeout(() => this.enemyTurn(), 800);
+                this.updateCombatUI();
+                this.updateUI();
+            },
+
+            enemyTurn: function(dmgMod = 1) {
+                if(!this.state.inCombat) return;
+                
+                if(Math.random() > 0.25) {
+                    let dmg = Math.floor((Math.random() * 15 + 10) * dmgMod);
+                    
+                    if(this.state.shields > 0) {
+                        if(this.state.shields >= dmg) {
+                            this.state.shields -= dmg;
+                            dmg = 0;
+                            this.log("Kalkanlar darbeyi emdi.", "log-system");
+                        } else {
+                            dmg -= this.state.shields;
+                            this.state.shields = 0;
+                            this.log("KALKANLAR ÇÖKTÜ!", "log-alert");
+                        }
+                    }
+                    
+                    if(dmg > 0) {
+                        this.state.hull -= dmg;
+                        this.log(`GÖVDE HASARI: -${dmg}%`, "log-combat");
+                        Visuals.takeDamage();
+                    }
+                } else {
+                    this.log("Düşman atışı ıskaladı.", "log-system");
+                }
+
+                if(this.state.hull <= 0) {
+                    alert("GEMİ İMHA EDİLDİ. OYUN BİTTİ.");
+                    location.reload();
+                }
+                this.updateUI();
+            },
+
+            winCombat: async function() {
+                this.log(`${this.state.enemy.name} imha edildi!`, "log-gemini");
+                const loot = Math.floor(Math.random() * 150) + 50;
+                this.state.credits += loot;
+                this.log(`${loot} Kredi enkazdan çıkarıldı.`, "log-loot");
+                if(Math.random() > 0.5) this.state.torpedoes++; // Loot ammo
+                this.endCombat();
+            },
+
+            endCombat: function() {
+                this.state.inCombat = false;
+                this.state.enemy = null;
+                Visuals.clearHolo();
+                Visuals.changeEnv('normal');
+                this.updateUI();
+            },
+
+            updateCombatUI: function() {
+                if(this.state.enemy) {
+                    const pct = Math.max(0, (this.state.enemy.hp / this.state.enemy.maxHp) * 100);
+                    document.getElementById('enemy-hp-bar').style.width = pct + '%';
+                }
+            },
+
+            findLoot: async function() {
+                const name = await AI.getLootName();
+                const val = Math.floor(Math.random() * 300) + 50;
+                this.state.inventory.push({ name, value: val });
+                this.log(`GANİMET: ${name} bulundu!`, "log-loot");
+                Visuals.spawnHolo('crate');
+            }
+        };
+
+        function toggleInventory() {
+            const m = document.getElementById('inv-modal');
+            const l = document.getElementById('inv-list');
+            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
+            if(m.style.display === 'flex') {
+                l.innerHTML = '';
+                if(Game.state.inventory.length === 0) l.innerHTML = '<div style="text-align:center;color:#666;">BOŞ</div>';
+                else Game.state.inventory.forEach(i => {
+                    const d = document.createElement('div'); d.className = 'inv-item';
+                    d.innerHTML = `<span>${i.name}</span> <span style="color:var(--warning-color)">${i.value} CR</span>`;
+                    l.appendChild(d);
+                });
+            }
+        }
+
+        /* ==========================================================================
+           2. GÖRSELLER (THREE.JS)
+           ========================================================================== */
+        const Visuals = {
+            scene: null, camera: null, renderer: null, holo: null, starGeo: null,
+            init: function() {
+                const c = document.querySelector('#webgl-container');
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(0x050505, 0.02);
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+                this.camera.position.z = 10;
+                this.renderer = new THREE.WebGLRenderer({ canvas:c, antialias:true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                
+                this.scene.add(new THREE.AmbientLight(0x404040, 2));
+                const p = new THREE.PointLight(0xffffff, 1.5); p.position.set(10,10,10); this.scene.add(p);
+                
+                this.holo = new THREE.Group(); this.scene.add(this.holo);
+                
+                // Yıldızlar
+                const arr = new Float32Array(6000*3);
+                for(let i=0; i<6000*3; i++) arr[i] = (Math.random()-0.5)*400;
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+                this.starGeo = new THREE.Points(geo, new THREE.PointsMaterial({size:0.2, color:0xffffff}));
+                this.scene.add(this.starGeo);
+                
+                this.animate();
+                window.onresize = () => { 
+                    this.camera.aspect = window.innerWidth/window.innerHeight; 
+                    this.camera.updateProjectionMatrix(); 
+                    this.renderer.setSize(window.innerWidth, window.innerHeight); 
+                };
+            },
+
+            animate: function() {
+                requestAnimationFrame(() => this.animate());
+                if(this.holo.children.length) {
+                    this.holo.rotation.y += 0.01;
+                    this.holo.rotation.x = Math.sin(Date.now()*0.001)*0.2;
+                }
+                this.renderer.render(this.scene, this.camera);
+            },
+
+            clearHolo: function() { while(this.holo.children.length) this.holo.remove(this.holo.children[0]); },
+            
+            spawnHolo: function(type) {
+                this.clearHolo(); let g, m;
+                if(type === 'enemy') {
+                    g = new THREE.ConeGeometry(1.5, 4, 4); 
+                    m = new THREE.MeshStandardMaterial({color:0xff0055, wireframe:true, emissive:0x550000});
+                    const mesh = new THREE.Mesh(g,m); mesh.rotation.x = Math.PI/2; 
+                    this.holo.add(mesh);
+                } else if(type === 'crate') {
+                    g = new THREE.BoxGeometry(2,2,2); m = new THREE.MeshStandardMaterial({color:0xffcc00, wireframe:true}); 
+                    this.holo.add(new THREE.Mesh(g,m));
+                } else {
+                    g = new THREE.SphereGeometry(2.5, 16, 16); m = new THREE.MeshStandardMaterial({color:0x00f3ff, wireframe:true, opacity:0.3, transparent:true}); 
+                    this.holo.add(new THREE.Mesh(g,m));
+                }
+            },
+
+            warpEffect: function(isHyper=false) {
+                let fov = 75; const limit = isHyper ? 170 : 150; const speed = isHyper ? 5 : 2;
+                const i = setInterval(() => {
+                    fov += speed; this.camera.fov = fov; this.camera.updateProjectionMatrix();
+                    if(fov > limit) { 
+                        clearInterval(i); 
+                        setTimeout(() => { this.camera.fov = 75; this.camera.updateProjectionMatrix(); }, 300); 
+                    }
+                }, 20);
+            },
+
+            changeEnv: function(type) {
+                if(type === 'alert') this.scene.fog.color.setHex(0x220000);
+                else if(type === 'nebula') this.scene.fog.color.setHex(0x220033);
+                else this.scene.fog.color.setHex(0x050505);
+            },
+
+            takeDamage: function() {
+                const e = document.getElementById('dmg-overlay');
+                e.classList.add('damage-active');
+                setTimeout(() => e.classList.remove('damage-active'), 400);
+            },
+
+            chargeEffect: function() {
+                const e = document.getElementById('charge-overlay');
+                e.classList.add('charging');
+                setTimeout(() => e.classList.remove('charging'), 1000);
+            },
+            
+            laserEffect: function(isHeavy=false) {
+                const intensity = isHeavy ? 0.5 : 0.2;
+                this.camera.position.x = intensity; 
+                setTimeout(() => this.camera.position.x = 0, 100);
+            }
+        };
+
+        /* ==========================================================================
+           3. YZ (GEMINI)
+           ========================================================================== */
+        const AI = {
+            key: "", 
+            call: async function(p, sys="Sen bir oyun yöneticisisin. Kısa cevap ver.") {
+                try {
+                    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${this.key}`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ contents: [{parts:[{text: p}]}], systemInstruction: {parts:[{text: sys}]} })
+                    });
+                    const d = await r.json();
+                    return d.candidates[0].content.parts[0].text;
+                } catch(e) { return "Veri Hatası"; }
+            },
+            getEnemyName: async function() { 
+                return await this.call("Korkutucu, bilim kurgu tarzı bir uzaylı gemisi veya fraksiyon ismi uydur (Örn: Sith Yokedici, Borg Küpü). Sadece ismi yaz."); 
+            },
+            getLootName: async function() { 
+                return await this.call("Değerli bir bilim kurgu eşyası ismi (Örn: Kyber Kristali, Dilityum). Sadece ismi yaz."); 
+            },
+            diplomacy: async function(enemyName) {
+                return await this.call(`Oyuncu seninle (${enemyName}) iletişim kuruyor. Barışçıl mı yoksa agresif mi tepki verirsin? Tek cümlelik diyalog yaz. Eğer barışı kabul edersen içinde 'BARIŞ' kelimesi geçsin.`, "Sen bir uzaylı gemisi kaptanısın.");
+            }
+        };
+
+        // BAŞLAT
+        Game.init();
+        Visuals.init();
+
+    </script>
+</body>
+</html>
