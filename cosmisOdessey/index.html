@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Odyssey | Galaktik Savaş</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;800&family=Share+Tech+Mono&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <canvas id="webgl-container"></canvas>
+    <div class="scanlines"></div>
+    <div class="damage-overlay" id="dmg-overlay"></div>
+    <div class="charge-overlay" id="charge-overlay"></div>
+
+    <!-- MENÜLER -->
+    <div class="fullscreen-menu" id="start-screen">
+        <div class="menu-title">COSMIC ODYSSEY</div>
+        <div style="font-family:'Share Tech Mono'; color:#aaa; max-width:600px; line-height:1.6;">
+            <p>HEDEF: 100 IŞIK YILI UZAKLIKTAKİ FEDERASYON ÜSSÜNE ULAŞ.</p>
+            <p style="margin-top:10px; font-size:0.9rem;">DİKKAT: Enerjini yönet, korsanlarla savaş ve hayatta kal.</p>
+        </div>
+
+        <div style="margin-top: 30px; display: flex; gap: 20px;">
+            <button class="menu-btn" onclick="Game.startGame('Interceptor')"
+                style="font-size: 1rem; padding: 10px 20px;">
+                INTERCEPTOR<br><small style="font-size:0.7rem; color:#888;">+Hasar, +Torpido, -Zırh</small>
+            </button>
+            <button class="menu-btn" onclick="Game.startGame('Explorer')" style="font-size: 1rem; padding: 10px 20px;">
+                EXPLORER<br><small style="font-size:0.7rem; color:#888;">+Hız, +Enerji, -Kalkan</small>
+            </button>
+            <button class="menu-btn" onclick="Game.startGame('Juggernaut')"
+                style="font-size: 1rem; padding: 10px 20px;">
+                JUGGERNAUT<br><small style="font-size:0.7rem; color:#888;">+Zırh, +Kalkan, -Enerji</small>
+            </button>
+        </div>
+
+        <button id="btn-continue" class="menu-btn" onclick="Game.loadGame()"
+            style="display:none; margin-top: 20px; border-color: var(--success-color); color: var(--success-color);">
+            DEVAM ET
+        </button>
+    </div>
+
+    <div class="fullscreen-menu" id="game-over-screen" style="display:none;">
+        <div class="menu-title game-over-title">GÖREV BAŞARISIZ</div>
+        <div style="font-family:'Share Tech Mono'; color:#aaa; font-size:1.2rem;" id="death-reason">GEMİ İMHA EDİLDİ
+        </div>
+        <button class="menu-btn" onclick="location.reload()">TEKRAR DENE</button>
+    </div>
+
+    <div class="fullscreen-menu" id="win-screen" style="display:none;">
+        <div class="menu-title win-title">GÖREV TAMAMLANDI</div>
+        <div style="font-family:'Share Tech Mono'; color:#aaa; font-size:1.2rem;">FEDERASYON ÜSSÜNE ULAŞILDI</div>
+        <div style="margin-top:20px; color:#fff; font-size:1.5rem;">SKOR: <span id="final-score">0</span></div>
+        <button class="menu-btn" onclick="location.reload()">YENİ GÖREV</button>
+    </div>
+
+    <!-- Market -->
+    <div class="modal-overlay" id="market-modal" onclick="if(event.target===this) toggleMarket()">
+        <div class="inventory-panel" style="width: 600px;">
+            <h2
+                style="color:var(--success-color); border-bottom:1px solid #555; margin-bottom:15px; display:flex; justify-content:space-between;">
+                <span>GALAKTİK PAZAR</span>
+                <span style="font-size:0.8rem; color:#fff;"><span id="market-credits">0</span> CR</span>
+            </h2>
+
+            <div class="market-grid">
+                <div class="market-col">
+                    <h4 style="color:#aaa; margin-bottom:10px;">SAT (Envanter)</h4>
+                    <div id="sell-list">
+                        <div style="text-align:center; color:#666;">Boş</div>
+                    </div>
+                </div>
+                <div class="market-col">
+                    <h4 style="color:#aaa; margin-bottom:10px;">SATIN AL (Yükseltmeler)</h4>
+                    <button class="upgrade-btn" onclick="Game.buyUpgrade('hull')">
+                        <span>GÖVDE ONAR (+50)</span> <span>150 CR</span>
+                    </button>
+                    <button class="upgrade-btn" onclick="Game.buyUpgrade('shield')">
+                        <span>KALKAN MAX (+10)</span> <span>300 CR</span>
+                    </button>
+                    <button class="upgrade-btn" onclick="Game.buyUpgrade('torp')">
+                        <span>TORPİDO (+1)</span> <span>100 CR</span>
+                    </button>
+                </div>
+            </div>
+            <button class="action-btn" onclick="toggleMarket()"
+                style="width:100%; margin-top:15px; border-color:#555; color:#aaa;">KAPAT</button>
+        </div>
+    </div>
+
+    <!-- Envanter -->
+    <div class="modal-overlay" id="inv-modal" onclick="if(event.target===this) toggleInventory()">
+        <div class="inventory-panel">
+            <h2 style="color:var(--warning-color); border-bottom:1px solid #555; margin-bottom:15px;">KARGO AMBARI</h2>
+            <div id="inv-list">
+                <div style="text-align:center; color:#666;">Ambar Boş</div>
+            </div>
+            <button class="action-btn" onclick="toggleInventory()"
+                style="width:100%; margin-top:15px; border-color:#555; color:#aaa;">KAPAT</button>
+        </div>
+    </div>
+
+    <div class="hud-layer">
+        <div class="reticle" id="reticle"></div>
+
+        <!-- Düşman HUD (Savaş Modunda) -->
+        <div class="center-hud" id="combat-hud">
+            <div class="enemy-card">
+                <div class="enemy-name" id="enemy-name">KORSAN GEMİSİ</div>
+                <div class="enemy-bar-frame">
+                    <div class="enemy-hp-fill" id="enemy-hp-bar"></div>
+                </div>
+                <div style="font-family:'Share Tech Mono'; color:#aaa; font-size:0.8rem;">HEDEF KİLİTLENDİ</div>
+            </div>
+        </div>
+
+        <div class="top-bar">
+            <div class="ship-status">
+                <div class="status-row">
+                    <span>GÖVDE</span>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="hull-bar" style="width: 100%; background: var(--success-color);">
+                        </div>
+                    </div>
+                    <span class="stat-val-text" id="hull-val">100%</span>
+                </div>
+                <div class="status-row">
+                    <span>KALKAN</span>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="shield-bar"
+                            style="width: 50%; background: var(--primary-color);"></div>
+                    </div>
+                    <span class="stat-val-text" id="shield-val">50%</span>
+                </div>
+                <div class="status-row">
+                    <span>ENERJİ</span>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="energy-bar" style="width: 100%; background: #a29bfe;"></div>
+                    </div>
+                    <span class="stat-val-text" id="energy-val">100%</span>
+                </div>
+                <div class="status-row">
+                    <span style="color:var(--secondary-color);">TORPİDO</span>
+                    <div style="font-family:'Share Tech Mono'; color:#fff;">[ <span id="torp-val">3</span> ]</div>
+                </div>
+            </div>
+
+            <div class="mission-info">
+                <div style="text-align:right; margin-bottom:5px;">
+                    <span style="color:#888; font-size:0.8rem; font-family:'Share Tech Mono';">HEDEF UZAKLIĞI</span><br>
+                    <span style="font-size:1.8rem; font-weight:800; color:#fff;"><span
+                            id="distance-val">100</span><small
+                            style="font-size:0.8rem; color:var(--primary-color);">IY</small></span>
+                </div>
+                <div class="inventory-btn" onclick="toggleInventory()">
+                    <i class="fas fa-box"></i> KARGO (<span id="inv-count">0</span>)
+                </div>
+                <div
+                    style="color:var(--warning-color); font-family:'Share Tech Mono'; font-size:1.2rem; text-align:right; margin-top:5px;">
+                    <i class="fas fa-coins"></i> <span id="credits">500</span> CR
+                </div>
+            </div>
+        </div>
+
+        <div class="middle-section">
+            <div class="log-panel" id="log-container">
+                <div class="log-entry"><span style="color:#888;">SİSTEM:</span> Reaktörler çevrimiçi.</div>
+                <div class="log-entry"><span class="log-gemini">YZ:</span> Otomatik enerji yenilenmesi aktif, Kaptan.
+                </div>
+            </div>
+        </div>
+
+        <div class="event-modal" id="event-modal">
+            <div class="modal-inner">
+                <div class="modal-title" id="modal-title">Olay</div>
+                <div class="modal-desc" id="modal-desc">Açıklama...</div>
+                <div id="modal-choices"></div>
+            </div>
+        </div>
+
+        <div class="control-deck">
+            <div class="ai-feedback" id="status-msg">BEKLEMEDE</div>
+
+            <!-- Seyir Modu -->
+            <div class="main-actions" id="nav-controls">
+                <button class="action-btn btn-scan" id="btn-scan" onclick="Game.scan()">
+                    <i class="fas fa-satellite-dish"></i> TARA <small>-5 Enerji</small>
+                </button>
+                <button class="action-btn btn-warp" id="btn-warp" onclick="Game.warp()">
+                    <i class="fas fa-forward"></i> WARP <small>-20 Enerji</small>
+                </button>
+                <button class="action-btn btn-charge" onclick="Game.recharge()">
+                    <i class="fas fa-bolt"></i> ŞARJ ET <small>+40 Enerji</small>
+                </button>
+                <button class="action-btn" style="border-color:var(--success-color); color:var(--success-color);"
+                    onclick="toggleMarket()">
+                    <i class="fas fa-shopping-cart"></i> PAZAR <small>Al/Sat</small>
+                </button>
+            </div>
+
+            <!-- Savaş Modu -->
+            <div class="main-actions" id="combat-controls" style="display:none;">
+                <button class="action-btn btn-attack" onclick="Game.firePhasers()">
+                    <i class="fas fa-crosshairs"></i> LAZER <small>-10 Enerji</small>
+                </button>
+                <button class="action-btn btn-torp" onclick="Game.fireTorpedo()">
+                    <i class="fas fa-bomb"></i> TORPİDO <small>-1 Cephane</small>
+                </button>
+                <button class="action-btn btn-charge" onclick="Game.recharge()">
+                    <i class="fas fa-bolt"></i> ŞARJ ET <small>Riskli !</small>
+                </button>
+                <button class="action-btn btn-diplo" onclick="Game.hailTarget()">
+                    <i class="fas fa-comments"></i> İLETİŞİM <small>Diplomasi</small>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Modules -->
+    <script src="js/ai.js"></script>
+    <script src="js/visuals.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/achievements.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
